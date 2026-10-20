@@ -1,0 +1,824 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Bodo-Bingo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@500;700&family=Archivo:wght@400;600;700&family=Bowlby+One&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: Bingo-Halle im Hörsaal. Kugeln zur Kartenwahl, ein großes Papierlos mit Live-Stand daneben, darunter alle 27 Lose. */
+:root{
+  --bg:#ebe9f0;
+  --surface:#f9f8fc;
+  --fg:#1f1d2e;
+  --muted:#5f5b74;
+  --rule:#d4d0df;
+  --accent:#c2185b;
+  --accent-fg:#ffffff;
+  --ok:#2c8549;
+  --scrim:rgba(18,16,28,.55);
+  --shadow:0 1px 0 rgba(31,29,51,.06),0 10px 26px -14px rgba(31,29,51,.45);
+  --ink:#1f1d33;
+  --ink-mid:rgba(31,29,51,.72);
+  --ink-soft:rgba(31,29,51,.28);
+  --cell:rgba(255,255,255,.42);
+  --ball-shade:rgba(31,29,51,.2);
+  --dauber:rgba(204,24,108,.55);
+  --dauber-hi:rgba(236,72,150,.42);
+  --stamp:#b0124f;
+  --stamp-fg:#ffffff;
+  --p1:#f8cedb; --p2:#f6e38a; --p3:#c3ddf3; --p4:#cfe8bf; --p5:#f8d2a7;
+  --f-display:"Bowlby One","Arial Black",Impact,sans-serif;
+  --f-name:"Archivo Narrow","Arial Narrow","Roboto Condensed",sans-serif;
+  --f-body:"Archivo",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#15141c;--surface:#1f1e29;--fg:#eceaf4;--muted:#a6a2bb;--rule:#34323f;
+    --accent:#ff5a9e;--accent-fg:#21061a;--ok:#5cc97f;--scrim:rgba(6,5,10,.72);
+    --shadow:0 1px 0 rgba(0,0,0,.3),0 12px 28px -12px rgba(0,0,0,.75);
+    --p1:#e9bccb;--p2:#e4d07a;--p3:#afcbe2;--p4:#bad6aa;--p5:#e8bf93;
+    color-scheme:dark;
+  }
+}
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;
+  background:var(--bg);color:var(--fg);
+  font-family:var(--f-body);font-size:15px;line-height:1.5;
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-top:calc(28px + env(safe-area-inset-top,0px));
+  padding-bottom:calc(56px + env(safe-area-inset-bottom,0px));
+}
+[hidden]{display:none!important}
+.wrap{max-width:1080px;margin:0 auto;display:grid;gap:30px}
+
+.top{display:grid;gap:4px}
+.eyebrow,.label{font-family:var(--f-mono);font-size:12px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin:0}
+h1{font-family:var(--f-display);font-weight:400;font-size:clamp(42px,10vw,92px);line-height:.92;margin:0;letter-spacing:-.005em;text-wrap:balance}
+h1 .dash{color:var(--accent)}
+.tag{margin:6px 0 0;font-size:clamp(17px,2.4vw,22px);font-weight:600}
+
+.picker{display:grid;gap:12px}
+.pickrow{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.live-pill{display:inline-flex;align-items:center;gap:8px;font:600 12px/1 var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:7px 11px;border:1px solid var(--rule);border-radius:999px;background:var(--surface);font-variant-numeric:tabular-nums}
+.live-pill::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.live-pill[data-state="on"]{color:var(--fg)}
+.live-pill[data-state="on"]::before{background:var(--ok);animation:pulse 2s ease-in-out infinite}
+.live-pill[data-state="off"]::before{background:var(--accent)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+.balls{display:flex;flex-wrap:wrap;gap:9px 8px}
+.ball{
+  position:relative;width:40px;height:40px;border-radius:50%;border:0;padding:0;
+  background:var(--paper);color:var(--ink);
+  font-family:var(--f-display);font-size:15px;line-height:1;cursor:pointer;
+  box-shadow:inset 0 -3px 0 var(--ball-shade);
+  font-variant-numeric:tabular-nums;
+  transition:transform .12s ease;
+}
+.ball:hover{transform:translateY(-2px)}
+.ball[aria-current="true"]{background:var(--accent);color:var(--accent-fg);box-shadow:0 0 0 3px var(--bg),0 0 0 5px var(--accent)}
+.ball:focus-visible{outline:3px solid var(--fg);outline-offset:3px}
+.ball-tag{position:absolute;top:-6px;right:-8px;min-width:19px;height:19px;padding:0 5px;border-radius:10px;background:var(--ink);color:var(--paper);font:700 10px/19px var(--f-body);box-shadow:0 0 0 2px var(--bg)}
+.ball[aria-current="true"] .ball-tag{color:var(--surface)}
+.ball-tag.me{background:var(--fg);color:var(--bg)}
+.ball-tag.bingo{background:var(--stamp);color:var(--stamp-fg)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13px;color:var(--muted);margin:0}
+.legend b{font-weight:600;color:var(--fg)}
+
+.play{display:grid;gap:26px;grid-template-columns:minmax(0,1fr)}
+@media (min-width:820px){.play{grid-template-columns:minmax(0,480px) minmax(0,1fr);align-items:start}}
+.ticket-slot{width:100%;max-width:480px;min-width:0}
+
+.ticket{
+  --paper:var(--p1);
+  container-type:inline-size;
+  position:relative;background:var(--paper);color:var(--ink);
+  border-radius:6px;box-shadow:var(--shadow);
+}
+.t-head{display:flex;justify-content:space-between;align-items:center;gap:8px;background:var(--ink);color:var(--paper);padding:10px 14px;border-radius:6px 6px 0 0;min-width:0}
+.t-brand{font-family:var(--f-display);font-size:clamp(12px,6.6cqi,30px);line-height:1;white-space:nowrap}
+.t-no{font-family:var(--f-mono);font-weight:600;font-size:clamp(9px,3.2cqi,14px);letter-spacing:.05em;white-space:nowrap;font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.t-body{position:relative;padding:12px 14px 14px;display:grid;gap:10px}
+.t-body::before,.t-body::after{content:"";position:absolute;top:-8px;width:16px;height:16px;border-radius:50%;background:var(--bg)}
+.t-body::before{left:-8px}
+.t-body::after{right:-8px}
+.t-meta{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-family:var(--f-mono);font-size:clamp(9px,2.9cqi,12px);letter-spacing:.04em;color:var(--ink-mid);padding-bottom:8px;border-bottom:1.5px dashed var(--ink-soft)}
+.t-player-line{font-weight:600;color:var(--ink);overflow-wrap:anywhere}
+.t-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:clamp(3px,1.5cqi,7px)}
+.t-col{text-align:center;font-family:var(--f-display);font-size:clamp(10px,6cqi,26px);line-height:1;padding-bottom:2px}
+.cell{
+  position:relative;aspect-ratio:6/5;min-width:0;
+  display:grid;place-items:center;padding:2px;margin:0;
+  border:1.5px solid var(--ink-soft);border-radius:4px;
+  background:var(--cell);color:var(--ink);
+  font-family:var(--f-name);font-weight:700;font-size:clamp(8px,4.5cqi,19px);line-height:1.05;
+  text-align:center;overflow-wrap:anywhere;
+  -webkit-tap-highlight-color:transparent;
+}
+button.cell{cursor:pointer;appearance:none;-webkit-appearance:none}
+button.cell:disabled{cursor:default;opacity:1}
+button.cell:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.cell > span{position:relative;z-index:1}
+.cell.on::before{
+  content:"";position:absolute;inset:8%;
+  border-radius:48% 52% 45% 55% / 54% 46% 54% 46%;
+  background:radial-gradient(circle at 38% 34%,var(--dauber-hi) 0,var(--dauber) 72%);
+  transform:translate(var(--dx,0),var(--dy,0)) rotate(var(--r,0deg));
+}
+.cell.on.fresh::before{animation:dab .24s ease-out}
+.cell.win{border-color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--ink)}
+@keyframes dab{
+  from{transform:translate(var(--dx,0),var(--dy,0)) rotate(var(--r,0deg)) scale(1.4);opacity:0}
+  to{transform:translate(var(--dx,0),var(--dy,0)) rotate(var(--r,0deg)) scale(1);opacity:1}
+}
+.t-joke{margin:2px 0 0;font-weight:600;font-size:clamp(12px,3.8cqi,16px);line-height:1.3;text-wrap:balance}
+.t-lbl{display:inline-block;margin-right:.5em;font-family:var(--f-mono);font-size:.72em;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-mid)}
+.t-fine{font-family:var(--f-mono);font-size:clamp(8px,2.5cqi,11px);letter-spacing:.03em;color:var(--ink-mid)}
+.stamp{
+  position:absolute;right:7%;bottom:14%;z-index:3;pointer-events:none;
+  transform:rotate(-14deg);
+  font-family:var(--f-display);font-size:clamp(16px,12cqi,56px);line-height:1;text-transform:uppercase;
+  color:var(--stamp);border:.07em solid var(--stamp);border-radius:.12em;padding:.08em .28em .04em;
+  opacity:.88;mix-blend-mode:multiply;
+}
+
+.side{display:grid;gap:20px;align-content:start;min-width:0}
+.panel{background:var(--surface);border:1px solid var(--rule);border-radius:12px;padding:16px 18px;display:grid;gap:10px;min-width:0}
+.st-top{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+#st-card{font-family:var(--f-display);font-weight:400;font-size:22px;line-height:1.1}
+#st-count{font-family:var(--f-mono);font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+#st-who{margin:0;font-weight:600;overflow-wrap:anywhere}
+#st-msg{margin:0;font-size:16px;max-width:60ch}
+.claim{display:grid;gap:8px}
+.claim label{font-weight:600}
+.field{display:flex;gap:8px;flex-wrap:wrap}
+.field input{flex:1 1 160px;min-width:0;font:500 16px var(--f-body);padding:10px 12px;border-radius:10px;border:1.5px solid var(--rule);background:var(--bg);color:var(--fg)}
+.field input:focus{outline:none;border-color:var(--accent)}
+.err{margin:0;color:var(--accent);font-size:14px;font-weight:600}
+.hint{margin:0;font-size:14px;color:var(--muted)}
+
+.board-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}
+.board-head h2{font-family:var(--f-display);font-weight:400;font-size:20px;line-height:1.1;margin:0}
+.winner{margin:0;padding:10px 12px;border-radius:10px;background:var(--accent);color:var(--accent-fg);font-weight:600;overflow-wrap:anywhere}
+.rows{list-style:none;margin:0;padding:0;display:grid;gap:2px}
+.rows li{display:flex;align-items:center;gap:4px;min-width:0}
+.row{flex:1;min-width:0;display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:10px;align-items:center;padding:7px 6px;border:0;border-radius:8px;background:transparent;color:var(--fg);font:inherit;text-align:left;cursor:pointer}
+.row:hover{background:var(--bg)}
+.row:focus-visible{outline:3px solid var(--accent);outline-offset:1px}
+.row-no{width:30px;height:30px;border-radius:50%;background:var(--paper);color:var(--ink);display:grid;place-items:center;font:400 12px/1 var(--f-display);font-variant-numeric:tabular-nums}
+.row-txt{min-width:0;display:grid}
+.row-name{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row-sub{font-size:13px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pips{display:flex;gap:3px}
+.pip{width:10px;height:10px;border-radius:2px;border:1.5px solid var(--muted)}
+.pip.on{background:var(--accent);border-color:var(--accent)}
+.chip{font:700 11px/1 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;padding:5px 7px;border-radius:5px;background:var(--stamp);color:var(--stamp-fg)}
+.xbtn{flex:none;font:600 12px/1 var(--f-body);padding:7px 9px;border-radius:999px;border:1px solid var(--rule);background:transparent;color:var(--muted);cursor:pointer}
+.xbtn[data-armed="1"]{border-color:var(--accent);color:var(--accent)}
+.empty{margin:0;color:var(--muted)}
+.ticker{list-style:none;margin:0;padding:10px 0 0;border-top:1px dashed var(--rule);display:grid;gap:4px;font-size:13px;color:var(--muted)}
+.ticker time{font-family:var(--f-mono);font-variant-numeric:tabular-nums;margin-right:8px;color:var(--fg)}
+
+.rules ol{margin:10px 0 0;padding:0;list-style:none;counter-reset:r;display:grid;gap:12px;max-width:62ch}
+.rules li{counter-increment:r;display:grid;grid-template-columns:28px minmax(0,1fr);gap:12px;align-items:start}
+.rules li::before{content:counter(r);font-family:var(--f-display);font-size:13px;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:var(--fg);color:var(--bg)}
+.note{margin:12px 0 0;font-size:13px;color:var(--muted)}
+
+.btn{font:600 14px/1 var(--f-body);padding:11px 16px;border-radius:999px;border:1.5px solid var(--fg);background:transparent;color:var(--fg);cursor:pointer}
+.btn:hover{background:var(--surface)}
+.btn:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.btn:disabled{opacity:.5;cursor:default}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.btn[data-armed="1"]{background:var(--fg);border-color:var(--fg);color:var(--bg)}
+.actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+
+.overview{display:grid;gap:16px;border-top:1px solid var(--rule);padding-top:26px}
+.ov-head h2{font-family:var(--f-display);font-weight:400;font-size:clamp(24px,4vw,32px);line-height:1.1;margin:0}
+.ov-head p{margin:6px 0 0;color:var(--muted);max-width:62ch}
+.all{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:18px}
+@media (max-width:600px){
+  .all{grid-template-columns:none;grid-auto-flow:column;grid-auto-columns:172px;overflow-x:auto;scroll-snap-type:x mandatory;padding:8px 4px 14px;margin:0 -4px}
+  .mini-btn{scroll-snap-align:start}
+}
+.mini-btn{display:block;border-radius:6px;cursor:pointer;transition:transform .12s ease}
+.mini-btn:hover{transform:translateY(-3px)}
+.mini-btn:focus-visible{outline:3px solid var(--accent);outline-offset:4px}
+.mini-btn[aria-current="true"]{outline:3px solid var(--accent);outline-offset:4px}
+.mini .t-head{padding:6px 8px}
+.mini .t-no{font-family:var(--f-body);font-weight:700;letter-spacing:0}
+.mini .t-no.free{opacity:.6;font-weight:600}
+.mini .t-body{padding:7px 8px 9px;gap:6px}
+.mini .t-body::before,.mini .t-body::after{width:10px;height:10px;top:-5px}
+.mini .t-body::before{left:-5px}
+.mini .t-body::after{right:-5px}
+.mini .cell{border-width:1px;border-radius:3px;padding:1px}
+
+.foot{font-family:var(--f-mono);font-size:12px;color:var(--muted);letter-spacing:.03em;display:grid;gap:4px}
+.foot p{margin:0}
+
+.overlay{
+  position:fixed;inset:0;z-index:50;display:grid;place-items:center;background:var(--scrim);
+  padding-top:calc(24px + env(safe-area-inset-top,0px));
+  padding-bottom:calc(24px + env(safe-area-inset-bottom,0px));
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+}
+.win-card{background:var(--surface);color:var(--fg);border-radius:16px;padding:28px 24px 24px;width:100%;max-width:360px;text-align:center;display:grid;gap:10px;box-shadow:var(--shadow)}
+.win-stamp{font-family:var(--f-display);font-size:62px;line-height:1;color:var(--accent);transform:rotate(-8deg);animation:slam .38s cubic-bezier(.2,1.5,.4,1)}
+.win-no{margin:6px 0 0;font-family:var(--f-mono);font-weight:600;letter-spacing:.06em;text-transform:uppercase;font-size:13px;color:var(--muted);overflow-wrap:anywhere}
+.win-card p{margin:0}
+.win-card .btn{justify-self:center;margin-top:8px}
+@keyframes slam{from{transform:rotate(-8deg) scale(2.2);opacity:0}to{transform:rotate(-8deg) scale(1);opacity:1}}
+.toast{
+  position:fixed;z-index:60;left:0;right:0;bottom:0;display:flex;justify-content:center;pointer-events:none;
+  padding-bottom:calc(16px + env(safe-area-inset-bottom,0px));
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+}
+.toast span{max-width:420px;background:var(--fg);color:var(--bg);padding:10px 14px;border-radius:10px;font-size:14px;font-weight:600;box-shadow:var(--shadow)}
+
+@media (prefers-reduced-motion:reduce){
+  .cell.on.fresh::before,.win-stamp,.live-pill[data-state="on"]::before{animation:none}
+  .ball,.mini-btn{transition:none}
+  .ball:hover,.mini-btn:hover{transform:none}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <p class="eyebrow">Hörsaal-Edition · Mi 21.10.2026</p>
+    <h1>Bodo<span class="dash">-</span>Bingo</h1>
+    <p class="tag">Er ruft auf. Wir haken ab.</p>
+  </header>
+
+  <section class="picker" aria-labelledby="pick-h">
+    <div class="pickrow">
+      <h2 id="pick-h" class="label">Wähl deine Karte</h2>
+      <span class="live-pill" id="live-pill" data-state="wait">Verbinde …</span>
+    </div>
+    <div class="balls" id="balls"></div>
+    <p class="legend" id="legend"><span><b>Initiale</b> = vergeben</span><span><b>du</b> = deine Karte</span><span>ohne Marke = frei</span></p>
+  </section>
+
+  <section class="play" id="play">
+    <div class="ticket-slot" id="ticket"></div>
+    <aside class="side">
+      <div class="panel" aria-live="polite">
+        <div class="st-top"><strong id="st-card">Karte 01</strong><span id="st-count"></span></div>
+        <p id="st-who"></p>
+        <p id="st-msg" hidden></p>
+
+        <form class="claim" id="claim" hidden>
+          <label for="player-name">Dein Name auf dieser Karte</label>
+          <div class="field">
+            <input id="player-name" name="player-name" type="text" maxlength="24" autocomplete="given-name" placeholder="z. B. Lukas">
+            <button class="btn primary" id="claim-btn" type="submit">Karte nehmen</button>
+          </div>
+          <p class="err" id="claim-err" hidden></p>
+        </form>
+
+        <div id="have-card" hidden>
+          <p class="hint" id="have-card-text"></p>
+          <button class="btn" id="goto-mine" type="button" style="margin-top:10px">Zu meiner Karte</button>
+        </div>
+      </div>
+
+      <div class="panel" id="board">
+        <div class="board-head"><h2>Live-Stand</h2><span class="label" id="board-count"></span></div>
+        <p class="winner" id="winner" hidden></p>
+        <p class="empty" id="board-empty">Verbinde mit dem Live-Stand …</p>
+        <ul class="rows" id="rows"></ul>
+        <ul class="ticker" id="ticker" hidden aria-label="Zuletzt passiert"></ul>
+      </div>
+
+      <div class="rules">
+        <h2 class="label">So läuft's</h2>
+        <ol>
+          <li><span>Nummer antippen, Namen eintragen, Karte nehmen. Dann ist sie für alle als vergeben markiert.</span></li>
+          <li><span>Ruft Bodo jemanden auf, tippst du den Namen auf deiner Karte an. Alle sehen live, wie weit du bist.</span></li>
+          <li><span>Vier in einer Reihe, Spalte oder Diagonale sind Bingo. Das erste Bingo gewinnt.</span></li>
+        </ol>
+        <p class="note">Fremde Karten kannst du dir ansehen, aber nicht abhaken. Deine Karte ist an dieses Handy und diesen Browser gebunden.</p>
+      </div>
+
+      <div class="actions">
+        <button class="btn" id="release" type="button" hidden>Karte freigeben</button>
+        <button class="btn" id="local-reset" type="button" hidden>Karte leeren</button>
+        <button class="btn" id="new-round" type="button" hidden>Neue Runde starten</button>
+      </div>
+    </aside>
+  </section>
+
+  <section class="overview" aria-labelledby="ov-h">
+    <div class="ov-head">
+      <h2 id="ov-h">Alle 27 Karten</h2>
+      <p>Jede Karte hat 16 der 27 Namen in eigener Reihenfolge. Tipp eine an, um sie zu nehmen oder anderen live zuzuschauen.</p>
+    </div>
+    <div class="all" id="all"></div>
+  </section>
+
+  <footer class="foot">
+    <p>Inoffiziell und nicht von Bodo genehmigt. Bitte leise gewinnen.</p>
+    <p>Der Live-Stand läuft über einen öffentlichen Test-Server. Ohne Gewähr.</p>
+  </footer>
+</div>
+
+<div class="overlay" id="win" hidden role="dialog" aria-modal="true" aria-labelledby="win-title">
+  <div class="win-card">
+    <div class="win-stamp" id="win-title">Bingo!</div>
+    <p class="win-no" id="win-no">Karte 01</p>
+    <p id="win-text">Volle Reihe.</p>
+    <button class="btn primary" id="win-close" type="button">Weiterspielen</button>
+  </div>
+</div>
+<div class="toast" id="toast" role="status" hidden><span id="toast-text"></span></div>
+
+<script src="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js"></script>
+<script>
+(function(){
+  "use strict";
+
+  /* ---------- Einstellungen ---------- */
+  // Öffentlicher MQTT-Server (kostenlos, ohne Account). Alternative: "wss://broker.hivemq.com:8884/mqtt"
+  var BROKER="wss://broker.emqx.io:8084/mqtt";
+  // Euer Raum auf dem Server. Wer diesen Namen kennt, spielt in derselben Runde.
+  var ROOM="bodo-bingo/hd-75de6b3128c5";
+  // Steuerung für die Spielleitung: Seite mit ?spielleitung am Ende öffnen.
+  var LEITUNG=/[?&]spielleitung(=|&|$)/.test(location.search);
+
+  var NAMES=["Amelie","Mona","Denis","Alina","Charlotte","Cindy","Hanibal","Lina","Louis","Lena G.","Finja","Anton","Laura","Lena B.","Moritz","David","Lilly","Isabelle","Alain","Jan","Strahinja","Line","Sophia","Jonas","Jana","Lukas","Daniel"];
+  var JOKES=[
+    "Bodo zeigt nicht auf dich. Er zeigt durch dich hindurch.",
+    "Blickkontakt mit Bodo zählt offiziell als Bewerbung.",
+    "Bodo kennt deinen Namen, deine Matrikelnummer und deine Ängste.",
+    "Schau nicht unters Bett. Bodo steht schon hinter dir.",
+    "Bodo hat Augen im Hinterkopf. Und im Beamer.",
+    "Bodo blinzelt nicht. Das wurde noch nie beobachtet.",
+    "Bodo wurde nicht geboren. Er wurde berufen.",
+    "In Bodos Vorlesung vergeht die Zeit nicht. Sie leidet.",
+    "Bodo hört deine Gedanken. Die falschen Antworten besonders laut.",
+    "Unsichtbar machen bringt nichts. Bodo sieht Wärmesignaturen.",
+    "Statistisch bist du nicht dran. Bodo pfeift auf Statistik.",
+    "Andere Profs haben Folien. Bodo hat Opfer.",
+    "Kapuze auf, Kopf runter, beten. Er findet dich trotzdem.",
+    "Wer gerade dran war, ist nicht sicher. Bodo liebt Wiederholungen.",
+    "Dieses Bingo ist nicht von Bodo genehmigt. Er weiß trotzdem schon davon.",
+    "Du denkst, du bist sicher. Bodo denkt das nicht.",
+    "Bodo vergisst kein Gesicht. Und keinen Namen. Leider.",
+    "Selbst in deinen Träumen ruft er dich auf.",
+    "Bodo braucht keinen Kaffee. Kaffee braucht Bodo.",
+    "Er ruft nicht auf. Er wählt aus.",
+    "Hinten sitzen schützt nicht. Bodo hat Fernsicht.",
+    "Krankmelden verschiebt das Problem nur auf nächste Woche.",
+    "Wenn es still wird im Hörsaal, lädt Bodo nach.",
+    "Bodo ist wie das WLAN in der Uni: unberechenbar, aber immer da.",
+    "Notausgang links. Bringt dir aber nichts.",
+    "Bodo schläft nicht. Er wartet auf die nächste Vorlesung.",
+    "Wer Bodo überlebt, überlebt alles. Fast alles."
+  ];
+  var N=27;
+  var reduce=false;
+  try{reduce=window.matchMedia("(prefers-reduced-motion: reduce)").matches}catch(e){}
+
+  function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+  function shuffle(arr,rnd){var a=arr.slice();for(var i=a.length-1;i>0;i--){var j=Math.floor(rnd()*(i+1));var t=a[i];a[i]=a[j];a[j]=t}return a}
+
+  // Feste Karten: jede lässt 3 Namen weg und mischt die übrigen 16.
+  var base=shuffle(NAMES,mulberry32(21102026));
+  var CARDS=[];
+  for(var i=0;i<N;i++){
+    var omit={},skip=base.length-16;
+    for(var k=0;k<skip;k++)omit[base[(i*skip+k)%base.length]]=true;
+    CARDS.push(shuffle(base.filter(function(n){return !omit[n]}),mulberry32(1000+i*7919)));
+  }
+  var LINES=[];
+  for(var r=0;r<4;r++)LINES.push([r*4,r*4+1,r*4+2,r*4+3]);
+  for(var c=0;c<4;c++)LINES.push([c,c+4,c+8,c+12]);
+  LINES.push([0,5,10,15],[3,6,9,12]);
+
+  function $(s){return document.querySelector(s)}
+  function paper(n){return "var(--p"+(((n-1)%5)+1)+")"}
+  function pad(n){return String(n).padStart(2,"0")}
+  function cid(n){return "c"+pad(n)}
+  function esc(s){return String(s).replace(/[&<>"']/g,function(ch){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]})}
+  function initial(p){var a=Array.from(p||"?");return (a[0]||"?").toUpperCase()}
+  function hhmm(t){var d=new Date(t);return pad(d.getHours())+":"+pad(d.getMinutes())}
+  function listDe(a){if(a.length<=1)return a[0]||"";return a.slice(0,-1).join(", ")+" oder "+a[a.length-1]}
+
+  function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
+  function lsSet(k,v){try{localStorage.setItem(k,v)}catch(e){}}
+  function randHex(b){var a=new Uint8Array(b);try{crypto.getRandomValues(a)}catch(e){for(var i=0;i<b;i++)a[i]=Math.floor(Math.random()*256)}return Array.from(a,function(x){return x.toString(16).padStart(2,"0")}).join("")}
+  var token=lsGet("bodo-bingo-token");
+  if(!token||!/^t_[a-f0-9]{16,}$/.test(token)){token="t_"+randHex(12);lsSet("bodo-bingo-token",token)}
+
+  var offline={};
+  try{var o=JSON.parse(lsGet("bodo-bingo-offline")||"null");if(o&&typeof o==="object")offline=o}catch(e){}
+  function saveOffline(){lsSet("bodo-bingo-offline",JSON.stringify(offline))}
+
+  function fromHash(){var m=/^#karte-(\d{1,2})$/.exec(location.hash||"");var n=m?+m[1]:0;return n>=1&&n<=N?n:0}
+  var sel=1;
+  var sv=parseInt(lsGet("bodo-bingo-sel")||"",10);if(sv>=1&&sv<=N)sel=sv;
+  var hashSel=fromHash();if(hashSel)sel=hashSel;
+
+  /* ---------- Zustand ---------- */
+  var mode="wait";        // wait | live | local
+  var client=null,connected=false,gotFirst=false,everConnected=false;
+  var cards={};           // n -> {player, token, marks:Set, bingoAt, claimedAt, seq}
+  var localSeq=0;
+  var ticker=[];
+
+  function clean(d){
+    if(!d||typeof d!=="object")return null;
+    var p=typeof d.player==="string"?d.player.replace(/\s+/g," ").trim().slice(0,24):"";
+    if(!p)return null;
+    var m=new Set();
+    if(Array.isArray(d.marks))d.marks.forEach(function(x){if(Number.isInteger(x)&&x>=0&&x<16)m.add(x)});
+    return {player:p,token:typeof d.token==="string"?d.token.slice(0,64):"",marks:m,
+      bingoAt:(typeof d.bingoAt==="number"&&isFinite(d.bingoAt))?d.bingoAt:null,
+      claimedAt:(typeof d.claimedAt==="number"&&isFinite(d.claimedAt))?d.claimedAt:0,
+      seq:(Number.isInteger(d.seq)&&d.seq>=0)?d.seq:0};
+  }
+  function marksOf(n){
+    if(mode==="live"){var cd=cards[n];return cd?cd.marks:new Set()}
+    if(mode==="local"){var m=offline[n],s=new Set();if(Array.isArray(m))m.forEach(function(x){if(Number.isInteger(x)&&x>=0&&x<16)s.add(x)});return s}
+    return new Set();
+  }
+  function myCard(){for(var n=1;n<=N;n++){if(cards[n]&&cards[n].token===token)return n}return 0}
+  function canMark(n){if(mode==="local")return true;if(mode==="live")return gotFirst&&myCard()===n;return false}
+  function stats(n,m){
+    var counts=LINES.map(function(l){return l.filter(function(x){return m.has(x)}).length});
+    var best=Math.max.apply(null,counts),need=[],wc=new Set(),wins=0;
+    LINES.forEach(function(l,i){
+      if(counts[i]===4){wins++;l.forEach(function(x){wc.add(x)})}
+      if(counts[i]===3){var nm=CARDS[n-1][l.filter(function(x){return !m.has(x)})[0]];if(need.indexOf(nm)<0)need.push(nm)}
+    });
+    return {best:best,count:m.size,need:best===3?need:[],wins:wins,winCells:wc};
+  }
+  function jitter(n,c){var h=(n*131+c*977)%1000;return "--r:"+((h%31)-15)+"deg;--dx:"+(((h>>2)%9)-4)+"%;--dy:"+(((h>>4)%9)-4)+"%"}
+  function winnerCard(){var best=0,t=Infinity;for(var n=1;n<=N;n++){var cd=cards[n];if(cd&&cd.bingoAt!=null&&cd.bingoAt<t){t=cd.bingoAt;best=n}}return best}
+  function playerCount(){var k=0;for(var n=1;n<=N;n++)if(cards[n])k++;return k}
+
+  /* ---------- Zeichnen ---------- */
+  function ticketHTML(n,mini){
+    var names=CARDS[n-1],m=marksOf(n),st=stats(n,m);
+    var cells=names.map(function(name,c){
+      var cls="cell"+(m.has(c)?" on":"")+(st.winCells.has(c)?" win":"");
+      if(mini)return '<span class="'+cls+'" style="'+jitter(n,c)+'"><span>'+name+'</span></span>';
+      return '<button type="button" class="'+cls+'" data-c="'+c+'" aria-pressed="'+m.has(c)+'" style="'+jitter(n,c)+'"><span>'+name+'</span></button>';
+    }).join("");
+    var cols=["B","O","D","O"].map(function(x){return '<span class="t-col" aria-hidden="true">'+x+'</span>'}).join("");
+    var head=mini
+      ?'<div class="t-head"><span class="t-brand">'+pad(n)+'</span><span class="t-no t-player"></span></div>'
+      :'<div class="t-head"><span class="t-brand">Bodo-Bingo</span><span class="t-no">Nr. '+pad(n)+' / '+N+'</span></div>';
+    return '<article class="ticket'+(mini?" mini":"")+'" style="--paper:'+paper(n)+'" aria-label="Bingo-Karte '+n+'">'+head+
+      '<div class="t-body">'+
+        (mini?'':'<div class="t-meta"><span class="t-player-line"></span><span>Mi 21.10.2026</span></div>')+
+        '<div class="t-grid">'+cols+cells+'</div>'+
+        (mini?'':'<p class="t-joke"><span class="t-lbl">Merke</span>'+JOKES[n-1]+'</p><div class="t-fine">4 in einer Reihe gewinnt · nur leise jubeln</div>')+
+      '</div>'+
+      '<div class="stamp" aria-hidden="true"'+(st.wins?'':' hidden')+'>Bingo</div>'+
+    '</article>';
+  }
+
+  var builtFor=0;
+  function renderBig(){
+    if(builtFor!==sel){$("#ticket").innerHTML=ticketHTML(sel,false);builtFor=sel}
+    var n=sel,m=marksOf(n),st=stats(n,m),can=canMark(n);
+    document.querySelectorAll("#ticket .cell").forEach(function(b){
+      var c=+b.dataset.c,on=m.has(c);
+      if(on&&!b.classList.contains("on")&&!reduce){b.classList.add("fresh");setTimeout(function(){b.classList.remove("fresh")},450)}
+      b.classList.toggle("on",on);
+      b.classList.toggle("win",st.winCells.has(c));
+      b.setAttribute("aria-pressed",String(on));
+      b.disabled=!can;
+    });
+    var stp=$("#ticket .stamp");if(stp)stp.hidden=!st.wins;
+    var pl=$("#ticket .t-player-line");
+    if(pl){
+      var cd=cards[n];
+      pl.textContent=mode==="local"?"Nur auf diesem Gerät":(mode==="wait"||!gotFirst)?"Verbinde …":cd?("Spieler: "+cd.player+(cd.token===token?" (du)":"")):"Noch frei";
+    }
+  }
+
+  function renderBalls(){
+    var h="";
+    for(var n=1;n<=N;n++){
+      var cd=mode==="live"?cards[n]:null,tag="",label="Karte "+n;
+      if(cd){
+        var me=cd.token===token,st=stats(n,cd.marks);
+        tag='<i class="ball-tag'+(me?" me":"")+(st.wins?" bingo":"")+'" aria-hidden="true">'+(me?"du":esc(initial(cd.player)))+'</i>';
+        label+=me?", deine Karte":", vergeben an "+cd.player;
+        if(st.wins)label+=", Bingo";
+      }else if(mode==="local"&&stats(n,marksOf(n)).wins){
+        tag='<i class="ball-tag bingo" aria-hidden="true">B</i>';label+=", Bingo";
+      }else if(mode==="live"&&gotFirst){label+=", frei"}
+      h+='<button type="button" class="ball" data-n="'+n+'" style="--paper:'+paper(n)+'" aria-current="'+(n===sel)+'" aria-label="'+esc(label)+'">'+n+tag+'</button>';
+    }
+    $("#balls").innerHTML=h;
+    $("#legend").hidden=mode!=="live";
+  }
+
+  function show(el,on){el.hidden=!on}
+  function renderStatus(){
+    var n=sel,cd=cards[n],m=marksOf(n),st=stats(n,m),mine=myCard();
+    $("#st-card").textContent="Karte "+pad(n);
+    show($("#claim"),mode==="live"&&gotFirst&&!cd&&!mine);
+    show($("#have-card"),mode==="live"&&gotFirst&&!cd&&!!mine);
+    if(mine)$("#have-card-text").textContent="Du spielst schon Karte "+pad(mine)+". Pro Handy gibt es eine Karte.";
+
+    var count="",whoTxt="",msgTxt="";
+    if(mode==="wait"||(mode==="live"&&!gotFirst)){whoTxt="Verbinde mit dem Live-Stand …"}
+    else if(mode==="local"){
+      whoTxt="Kein Live-Stand. Du spielst nur auf diesem Gerät.";count=m.size+" von 16 abgehakt";
+      msgTxt=st.wins?"Bingo! Du hast eine volle Reihe.":st.best===3?"Noch ein Name bis Bingo. Du wartest auf "+listDe(st.need)+".":m.size?"Beste Reihe: "+st.best+" von 4.":"Noch nichts passiert. Bodo wärmt sich auf.";
+    }
+    else if(!cd){whoTxt="Diese Karte ist noch frei."}
+    else if(cd.token===token){
+      whoTxt="Deine Karte · "+cd.player;count=m.size+" von 16 abgehakt";
+      msgTxt=st.wins?"Bingo! Alle sehen gerade deine volle Reihe.":st.best===3?"Noch ein Name bis Bingo. Du wartest auf "+listDe(st.need)+".":m.size?"Beste Reihe: "+st.best+" von 4.":"Noch nichts passiert. Bodo wärmt sich auf.";
+    }else{
+      whoTxt="Gespielt von "+cd.player;count=m.size+" von 16 abgehakt";
+      msgTxt=st.wins?cd.player+" hat Bingo.":st.best===3?cd.player+" wartet auf "+listDe(st.need)+".":m.size?"Beste Reihe: "+st.best+" von 4.":cd.player+" hat noch nichts abgehakt.";
+    }
+    $("#st-count").textContent=count;
+    $("#st-who").textContent=whoTxt;
+    var msg=$("#st-msg");msg.textContent=msgTxt;msg.hidden=!msgTxt;
+  }
+
+  var armedRow=0,armedTimer=null;
+  function renderBoard(){
+    var rows=$("#rows"),empty=$("#board-empty"),win=$("#winner");
+    rows.innerHTML="";
+    if(mode!=="live"||!gotFirst){
+      empty.textContent=mode==="local"?"Den Live-Stand gibt es gerade nicht. Lade die Seite später neu, um es noch mal zu versuchen.":"Verbinde mit dem Live-Stand …";
+      empty.hidden=false;win.hidden=true;$("#board-count").textContent="";$("#ticker").hidden=true;return;
+    }
+    var list=[];
+    for(var n=1;n<=N;n++){if(cards[n])list.push({n:n,c:cards[n],st:stats(n,cards[n].marks)})}
+    list.sort(function(a,b){
+      var ab=a.c.bingoAt!=null,bb=b.c.bingoAt!=null;
+      if(ab!==bb)return ab?-1:1;
+      if(ab&&bb&&a.c.bingoAt!==b.c.bingoAt)return a.c.bingoAt-b.c.bingoAt;
+      if(a.st.best!==b.st.best)return b.st.best-a.st.best;
+      if(a.st.count!==b.st.count)return b.st.count-a.st.count;
+      return a.n-b.n;
+    });
+    $("#board-count").textContent=list.length+" / "+N+" vergeben";
+    empty.textContent="Noch keine Karte vergeben. Tipp oben eine Nummer an und trag deinen Namen ein.";
+    empty.hidden=list.length>0;
+    var wn=winnerCard();
+    if(wn){win.textContent="Erstes Bingo: "+cards[wn].player+" mit Karte "+pad(wn)+" um "+hhmm(cards[wn].bingoAt)+" Uhr";win.hidden=false}else win.hidden=true;
+    list.forEach(function(it){
+      var li=document.createElement("li");
+      var b=document.createElement("button");b.type="button";b.className="row";b.dataset.n=it.n;
+      b.innerHTML='<span class="row-no" style="--paper:'+paper(it.n)+'">'+it.n+'</span><span class="row-txt"><span class="row-name"></span><span class="row-sub"></span></span>'+
+        (it.st.wins?'<span class="chip">Bingo</span>':'<span class="pips" aria-hidden="true">'+[0,1,2,3].map(function(k){return '<i class="pip'+(k<it.st.best?" on":"")+'"></i>'}).join("")+'</span>');
+      b.querySelector(".row-name").textContent=it.c.player+(it.c.token===token?" (du)":"");
+      b.querySelector(".row-sub").textContent=it.st.wins?"volle Reihe":it.st.best===3?"wartet auf "+listDe(it.st.need):it.st.count+" von 16 abgehakt";
+      b.setAttribute("aria-label","Karte "+it.n+", "+it.c.player+", "+(it.st.wins?"Bingo":"beste Reihe "+it.st.best+" von 4"));
+      li.appendChild(b);
+      if(LEITUNG){
+        var x=document.createElement("button");x.type="button";x.className="xbtn";x.dataset.release=it.n;
+        var armed=armedRow===it.n;x.dataset.armed=armed?"1":"";x.textContent=armed?"Sicher?":"Freigeben";
+        x.setAttribute("aria-label","Karte "+it.n+" freigeben");
+        li.appendChild(x);
+      }
+      rows.appendChild(li);
+    });
+    var tk=$("#ticker");tk.innerHTML="";
+    ticker.slice(0,6).forEach(function(e){
+      var li=document.createElement("li");var t=document.createElement("time");t.textContent=hhmm(e.t);li.appendChild(t);li.appendChild(document.createTextNode(e.text));tk.appendChild(li);
+    });
+    tk.hidden=!ticker.length;
+  }
+
+  function renderMinis(){
+    var h="";
+    for(var n=1;n<=N;n++)h+='<div class="mini-btn" role="button" tabindex="0" data-n="'+n+'" aria-current="'+(n===sel)+'">'+ticketHTML(n,true)+'</div>';
+    var all=$("#all");all.innerHTML=h;
+    all.querySelectorAll(".mini-btn").forEach(function(el){
+      var n=+el.dataset.n,cd=mode==="live"?cards[n]:null,p=el.querySelector(".t-player");
+      if(cd){p.textContent=cd.player+(cd.token===token?" (du)":"");el.setAttribute("aria-label","Karte "+n+", "+cd.player)}
+      else if(mode==="live"&&gotFirst){p.textContent="frei";p.classList.add("free");el.setAttribute("aria-label","Karte "+n+", frei")}
+      else el.setAttribute("aria-label","Karte "+n);
+    });
+  }
+
+  function renderPill(){
+    var p=$("#live-pill");
+    if(mode==="live"&&connected&&gotFirst){p.dataset.state="on";p.textContent="Live · "+playerCount()+" Spieler"}
+    else if(mode==="live"&&!connected){p.dataset.state="off";p.textContent="Verbindung weg …"}
+    else if(mode==="local"){p.dataset.state="off";p.textContent="Nur lokal"}
+    else{p.dataset.state="wait";p.textContent="Verbinde …"}
+  }
+  function renderActions(){
+    var mine=myCard();
+    show($("#release"),mode==="live"&&!!mine&&mine===sel);
+    show($("#local-reset"),mode==="local"&&marksOf(sel).size>0);
+    show($("#new-round"),mode==="live"&&gotFirst&&LEITUNG);
+  }
+  function renderAll(){renderBalls();renderBig();renderStatus();renderBoard();renderMinis();renderPill();renderActions()}
+
+  var toastTimer=null;
+  function flash(t){$("#toast-text").textContent=t;$("#toast").hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(function(){$("#toast").hidden=true},4200)}
+
+  function select(n,scroll){
+    if(!(n>=1&&n<=N))return;
+    sel=n;lsSet("bodo-bingo-sel",String(n));
+    $("#claim-err").hidden=true;
+    renderAll();
+    try{history.replaceState(null,"","#karte-"+n)}catch(e){}
+    if(scroll){var p=document.getElementById("play");if(p)p.scrollIntoView({behavior:reduce?"auto":"smooth",block:"start"})}
+  }
+
+  /* ---------- Senden ---------- */
+  function topicOf(n){return ROOM+"/card/"+cid(n)}
+  function sendCard(n,cd){
+    if(!client)return;
+    var body=JSON.stringify({player:cd.player,token:cd.token,marks:Array.from(cd.marks).sort(function(a,b){return a-b}),bingoAt:cd.bingoAt,claimedAt:cd.claimedAt,seq:cd.seq});
+    client.publish(topicOf(n),body,{qos:1,retain:true},function(err){if(err)flash("Senden hat nicht geklappt. Prüf deine Verbindung.")});
+  }
+  function clearCard(n){
+    if(!client)return;
+    client.publish(topicOf(n),"",{qos:1,retain:true},function(err){if(err)flash("Freigeben hat nicht geklappt. Prüf deine Verbindung.")});
+  }
+  var pubTimer=null;
+  function publishMine(n){
+    clearTimeout(pubTimer);
+    pubTimer=setTimeout(function(){var cd=cards[n];if(cd&&cd.token===token)sendCard(n,cd)},120);
+  }
+
+  function claim(n,name){
+    var err=$("#claim-err");err.hidden=true;
+    if(cards[n]&&cards[n].token!==token){err.textContent="Karte "+pad(n)+" ist schon vergeben.";err.hidden=false;return}
+    if(myCard()){err.textContent="Du spielst schon eine Karte.";err.hidden=false;return}
+    localSeq++;
+    var cd={player:name,token:token,marks:new Set(),bingoAt:null,claimedAt:Date.now(),seq:localSeq};
+    cards[n]=cd;
+    sendCard(n,cd);
+    lsSet("bodo-bingo-name",name);
+    renderAll();
+    flash("Karte "+pad(n)+" gehört jetzt dir.");
+  }
+
+  /* ---------- Bedienung ---------- */
+  $("#ticket").addEventListener("click",function(e){
+    var b=e.target.closest(".cell");if(!b||b.disabled)return;
+    var n=sel,c=+b.dataset.c;if(!canMark(n))return;
+    if(mode==="local"){
+      var m=marksOf(n),before=stats(n,m).wins;
+      if(m.has(c))m.delete(c);else m.add(c);
+      offline[n]=Array.from(m);saveOffline();
+      renderAll();
+      if(stats(n,m).wins>before)showWin("Karte "+pad(n),"Volle Reihe. Jetzt bitte unauffällig jubeln, sonst ruft er dich als Nächstes auf.");
+      return;
+    }
+    var cd=cards[n];
+    var before2=stats(n,cd.marks).wins;
+    var nm=new Set(cd.marks);if(nm.has(c))nm.delete(c);else nm.add(c);
+    var after=stats(n,nm).wins;
+    localSeq++;
+    cards[n]={player:cd.player,token:cd.token,marks:nm,claimedAt:cd.claimedAt,seq:localSeq,
+      bingoAt:after?(cd.bingoAt!=null?cd.bingoAt:Date.now()):null};
+    publishMine(n);
+    renderAll();
+    if(after>before2)showWin("Karte "+pad(n)+" · "+cd.player,"Volle Reihe. Alle sehen es gerade live. Jetzt bitte unauffällig jubeln.");
+  });
+
+  $("#balls").addEventListener("click",function(e){var b=e.target.closest(".ball");if(b)select(+b.dataset.n,false)});
+  $("#all").addEventListener("click",function(e){var b=e.target.closest(".mini-btn");if(b)select(+b.dataset.n,true)});
+  $("#all").addEventListener("keydown",function(e){
+    if(e.key!=="Enter"&&e.key!==" ")return;
+    var b=e.target.closest(".mini-btn");if(!b)return;
+    e.preventDefault();select(+b.dataset.n,true);
+  });
+  $("#rows").addEventListener("click",function(e){
+    var x=e.target.closest(".xbtn");
+    if(x){
+      var n=+x.dataset.release;
+      if(armedRow===n){armedRow=0;clearTimeout(armedTimer);release(n)}
+      else{armedRow=n;clearTimeout(armedTimer);armedTimer=setTimeout(function(){armedRow=0;renderBoard()},3500);renderBoard()}
+      return;
+    }
+    var b=e.target.closest(".row");if(b)select(+b.dataset.n,true);
+  });
+
+  $("#claim").addEventListener("submit",function(e){
+    e.preventDefault();
+    var name=$("#player-name").value.replace(/\s+/g," ").trim().slice(0,24);
+    var err=$("#claim-err");
+    if(!name){err.textContent="Trag zuerst deinen Namen ein.";err.hidden=false;$("#player-name").focus();return}
+    if(mode!=="live")return;
+    claim(sel,name);
+  });
+  $("#goto-mine").addEventListener("click",function(){var m=myCard();if(m)select(m,true)});
+
+  function twoTap(btn,label,armedLabel,action){
+    btn.addEventListener("click",function(){
+      if(btn.dataset.armed==="1"){clearTimeout(btn._t);btn.dataset.armed="";btn.textContent=label;action()}
+      else{btn.dataset.armed="1";btn.textContent=armedLabel;btn._t=setTimeout(function(){btn.dataset.armed="";btn.textContent=label},3500)}
+    });
+  }
+  function release(n){clearCard(n);delete cards[n];renderAll();flash("Karte "+pad(n)+" ist wieder frei.")}
+  twoTap($("#release"),"Karte freigeben","Wirklich freigeben?",function(){var m=myCard();if(m)release(m)});
+  twoTap($("#local-reset"),"Karte leeren","Wirklich leeren?",function(){delete offline[sel];saveOffline();renderAll()});
+  twoTap($("#new-round"),"Neue Runde starten","Alle Karten wirklich freigeben?",function(){
+    for(var n=1;n<=N;n++)clearCard(n);
+    cards={};ticker=[];renderAll();flash("Neue Runde. Alle Karten sind wieder frei.");
+  });
+
+  var ov=$("#win");
+  function showWin(no,text){$("#win-no").textContent=no;$("#win-text").textContent=text;ov.hidden=false;$("#win-close").focus()}
+  function closeWin(){ov.hidden=true}
+  $("#win-close").addEventListener("click",closeWin);
+  ov.addEventListener("click",function(e){if(e.target===ov)closeWin()});
+  document.addEventListener("keydown",function(e){if(e.key==="Escape"&&!ov.hidden)closeWin()});
+  window.addEventListener("hashchange",function(){var x=fromHash();if(x&&x!==sel)select(x,false)});
+
+  /* ---------- Live-Verbindung ---------- */
+  function pushTick(text){ticker.unshift({t:Date.now(),text:text});if(ticker.length>12)ticker.length=12}
+  function onMessage(topic,payload,packet){
+    var mm=/\/card\/c(\d{2})$/.exec(topic);if(!mm)return;
+    var n=+mm[1];if(!(n>=1&&n<=N))return;
+    var data=null;
+    try{
+      var txt=typeof payload==="string"?payload:new TextDecoder().decode(payload);
+      if(txt)data=clean(JSON.parse(txt));
+    }catch(e){data=null}
+    var catchup=!gotFirst||(packet&&packet.retain);
+    var prev=cards[n]||null;
+
+    // Eigene Karte: veraltete Echos ignorieren
+    if(data&&data.token===token){
+      if(prev&&prev.token===token&&data.seq<localSeq)return;
+      if(data.seq>localSeq)localSeq=data.seq;
+    }
+    if(!data&&prev&&prev.token===token&&catchup&&gotFirst)return; // eigener Claim noch unterwegs
+
+    if(!catchup){
+      if(!prev&&data)pushTick(data.player+" spielt Karte "+pad(n)+".");
+      else if(prev&&!data)pushTick("Karte "+pad(n)+" ist wieder frei.");
+      else if(prev&&data){
+        if(prev.token!==data.token)pushTick(data.player+" spielt Karte "+pad(n)+".");
+        else data.marks.forEach(function(x){if(!prev.marks.has(x))pushTick(data.player+" hakt "+CARDS[n-1][x]+" ab.")});
+      }
+      if(prev&&prev.token===token&&data&&data.token!==token)flash(data.player+" hat sich Karte "+pad(n)+" geschnappt.");
+      if(data&&data.token!==token&&data.bingoAt!=null&&!(prev&&prev.token===data.token&&prev.bingoAt!=null)){
+        var first=true;for(var k=1;k<=N;k++){var oc=cards[k];if(k!==n&&oc&&oc.bingoAt!=null&&oc.bingoAt<data.bingoAt)first=false}
+        pushTick(data.player+" hat Bingo!");
+        showWin("Karte "+pad(n)+" · "+data.player,first?data.player+" hat das erste Bingo der Runde.":data.player+" hat auch Bingo, aber nicht als Erste oder Erster.");
+      }
+    }
+    if(data)cards[n]=data;else delete cards[n];
+    renderAll();
+  }
+
+  function goLocal(reason){
+    if(mode==="live")return;
+    mode="local";renderAll();
+    if(reason)flash(reason+" Du spielst jetzt nur auf diesem Gerät.");
+  }
+  function connect(){
+    if(!window.mqtt||typeof window.mqtt.connect!=="function"){goLocal("Die Live-Verbindung ließ sich nicht laden.");return}
+    var timer=setTimeout(function(){if(!everConnected)goLocal("Der Live-Server antwortet nicht.")},10000);
+    try{
+      client=window.mqtt.connect(BROKER,{clean:true,reconnectPeriod:2500,connectTimeout:8000,keepalive:30,clientId:"bb_"+randHex(8)});
+    }catch(e){clearTimeout(timer);goLocal("Die Live-Verbindung ließ sich nicht starten.");return}
+    client.on("connect",function(){
+      everConnected=true;clearTimeout(timer);
+      if(mode==="local"){flash("Der Live-Server ist jetzt erreichbar. Lade die Seite neu, um live zu spielen.");try{client.end(true)}catch(e){}return}
+      mode="live";connected=true;
+      client.subscribe(ROOM+"/card/+",{qos:1},function(err){
+        if(err){flash("Anmelden beim Live-Stand hat nicht geklappt.");return}
+        if(!gotFirst)setTimeout(function(){
+          gotFirst=true;
+          var mine=myCard();
+          if(!hashSel&&mine&&sel!==mine)sel=mine;
+          renderAll();
+        },800);
+      });
+      renderAll();
+    });
+    function down(){if(mode==="live"&&connected){connected=false;renderAll()}}
+    client.on("offline",down);
+    client.on("close",down);
+    client.on("error",function(){});
+    client.on("message",onMessage);
+  }
+
+  var savedName=lsGet("bodo-bingo-name");if(savedName)$("#player-name").value=savedName.slice(0,24);
+  renderAll();
+  connect();
+})();
+</script>
+</body>
+</html>
